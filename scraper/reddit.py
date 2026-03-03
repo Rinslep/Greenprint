@@ -1,28 +1,63 @@
-# scraper/reddit.py
-#
-# TODO: Scraper for r/factorio using PRAW.
-#
-# Source characteristics:
-# - Rate limit: 60 requests/minute (PRAW handles this automatically, but stay aware).
-# - Blueprint strings appear in post bodies and comments — both must be searched.
-# - Use PRAW's subreddit search to find posts containing blueprint strings.
-#
-# Implementation notes:
-# - Extend BaseScraper.
-# - Authenticate via config.REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USER_AGENT.
-# - Search r/factorio for posts likely to contain blueprints (keyword + flair filters).
-# - For each post: run the base class string extraction regex over the post body.
-# - Also iterate top-level comments and their replies; apply the same regex.
-# - Author identifier: use praw Redditor.name (stored raw; anonymised in storage layer).
-# - source_url: direct link to the post or comment.
-# - Pass candidates to self._process_string(raw, source_url, author).
-# - Record progress by post/comment ID in the resumability DB to allow incremental runs.
-# - PRAW enforces its own rate limiting — don't add extra sleep beyond what PRAW requires
-#   unless the base class delay is longer.
+"""Scraper for r/factorio using PRAW."""
 
+import logging
 
-from scraper.base import BaseScraper
+import praw
+
+from config import settings
+from scraper.base import BaseScraper, extract_blueprint_strings
+
+logger = logging.getLogger(__name__)
 
 
 class RedditScraper(BaseScraper):
-    pass  # TODO: implement
+    """Scrapes blueprint strings from r/factorio posts and comments."""
+
+    source_site = "reddit"
+
+    def run(self):
+        """Search r/factorio for posts containing blueprint strings."""
+        if not settings.reddit_client_id:
+            logger.error("Reddit credentials not configured, skipping")
+            return
+
+        reddit = praw.Reddit(
+            client_id=settings.reddit_client_id,
+            client_secret=settings.reddit_client_secret,
+            user_agent=settings.reddit_user_agent or "greenprint-scraper/0.1",
+        )
+
+        subreddit = reddit.subreddit("factorio")
+
+        for submission in subreddit.search("blueprint", sort="new", limit=self.limit):
+            if not self._should_continue():
+                break
+
+            post_url = f"https://reddit.com{submission.permalink}"
+            if self._is_fetched(post_url):
+                continue
+
+            # Search post body
+            if submission.selftext:
+                candidates = extract_blueprint_strings(submission.selftext)
+                for raw in candidates:
+                    if not self._should_continue():
+                        break
+                    author = str(submission.author) if submission.author else None
+                    self._process_string(raw, post_url, author)
+
+            # Search comments
+            submission.comments.replace_more(limit=0)
+            for comment in submission.comments.list():
+                if not self._should_continue():
+                    break
+                if comment.body:
+                    candidates = extract_blueprint_strings(comment.body)
+                    for raw in candidates:
+                        if not self._should_continue():
+                            break
+                        comment_url = f"https://reddit.com{comment.permalink}"
+                        author = str(comment.author) if comment.author else None
+                        self._process_string(raw, comment_url, author)
+
+            self._mark_fetched(post_url)

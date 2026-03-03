@@ -1,26 +1,54 @@
-# api/v1/recipes.py
-#
-# TODO: Reference recipe data endpoints (read-only, served from reference/recipes.json).
-#
-# Endpoints:
-#
-# GET /v1/recipes
-#   - Accepts: ?filter=..., ?page=, ?per_page=
-#   - Filter fields: category, valid_machine (entity name), input_item, output_item.
-#   - Returns: paginated list of recipe objects from the reference dataset.
-#   - This endpoint reads from reference/recipes.json (cached at startup) — NOT the DB.
-#
-# GET /v1/recipes/{name}
-#   - Returns: a single recipe by its internal name.
-#   - 404 if the name is not in the vanilla 1.1 reference set.
-#   - Useful for API consumers looking up crafting details.
-#
-# Note: this data never changes between requests (it's the static reference set).
-# Cache the loaded recipes in memory at startup — do not re-read the file per request.
+"""Reference recipe data endpoints (read-only, from reference/recipes.json)."""
 
+import json
+from functools import lru_cache
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+
+from api.dependencies import envelope, paginate
+from config import REFERENCE_DIR
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
-# TODO: implement all route handlers
+
+@lru_cache(maxsize=1)
+def _load_recipes() -> tuple:
+    """Load and cache recipes from the reference JSON file."""
+    path = REFERENCE_DIR / "recipes.json"
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    # Return as tuple for lru_cache hashability
+    return tuple(data) if isinstance(data, list) else (data,)
+
+
+def _get_recipes_list() -> list[dict]:
+    return list(_load_recipes())
+
+
+@lru_cache(maxsize=1)
+def _recipes_by_name() -> dict:
+    """Build a name->recipe lookup dict."""
+    return {r["name"]: r for r in _load_recipes()}
+
+
+@router.get("")
+def list_recipes(
+    pagination: dict = Depends(paginate),
+):
+    """List recipes from the reference dataset."""
+    all_recipes = _get_recipes_list()
+    total = len(all_recipes)
+    start = pagination["offset"]
+    end = start + pagination["limit"]
+    page = all_recipes[start:end]
+    return envelope(page, total=total, page=pagination["page"], per_page=pagination["per_page"])
+
+
+@router.get("/{name}")
+def get_recipe(name: str):
+    """Get a single recipe by name."""
+    lookup = _recipes_by_name()
+    recipe = lookup.get(name)
+    if recipe is None:
+        raise HTTPException(status_code=404, detail=f"Recipe '{name}' not found")
+    return envelope(recipe)

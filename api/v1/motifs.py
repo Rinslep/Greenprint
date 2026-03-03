@@ -1,28 +1,53 @@
-# api/v1/motifs.py
-#
-# TODO: Motif catalogue endpoints.
-#
-# Endpoints:
-#
-# GET /v1/motifs
-#   - Accepts: ?filter=..., ?page=, ?per_page=
-#   - Filter fields: category, belt_type, uses_underground (bool), uses_splitter (bool),
-#     entity_count (int with operator), occurrence_count (int with operator).
-#   - Returns: response envelope with list of motifs.
-#   - Each motif: canonical_hash, category, occurrence_count, belt_type, uses_underground,
-#     uses_splitter, entity_count, source_recipes, dest_recipes, first_seen_at.
-#
-# GET /v1/motifs/{id}
-#   - Returns: full motif record including canonical_entities.
-#   - 404 if not found.
-#
-# GET /v1/motifs/{id}/blueprints
-#   - Returns: paginated list of blueprints that contain this motif.
-#   - Include position_context from the blueprint_motifs junction table.
+"""Motif catalogue endpoints."""
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
-from fastapi import APIRouter
+import storage
+from api.dependencies import envelope, get_db, paginate, parse_filter_string
+from api.v1.schemas import BlueprintSummaryResponse, MotifDetailResponse, MotifSummaryResponse
 
 router = APIRouter(prefix="/motifs", tags=["motifs"])
 
-# TODO: implement all route handlers
+
+@router.get("")
+def list_motifs(
+    filters: dict = Depends(parse_filter_string),
+    pagination: dict = Depends(paginate),
+    db: Session = Depends(get_db),
+):
+    """List motifs with optional filters and pagination."""
+    motifs, total = storage.list_motifs(
+        db, filters=filters, offset=pagination["offset"], limit=pagination["limit"],
+    )
+    data = [MotifSummaryResponse.model_validate(m).model_dump() for m in motifs]
+    return envelope(data, total=total, page=pagination["page"], per_page=pagination["per_page"])
+
+
+@router.get("/{motif_id}")
+def get_motif(motif_id: str, db: Session = Depends(get_db)):
+    """Get full motif by ID."""
+    motif = storage.get_motif(db, motif_id)
+    if motif is None:
+        raise HTTPException(status_code=404, detail="Motif not found")
+    data = MotifDetailResponse.model_validate(motif).model_dump()
+    return envelope(data)
+
+
+@router.get("/{motif_id}/blueprints")
+def get_motif_blueprints(
+    motif_id: str,
+    pagination: dict = Depends(paginate),
+    db: Session = Depends(get_db),
+):
+    """Get blueprints that contain a given motif."""
+    motif = storage.get_motif(db, motif_id)
+    if motif is None:
+        raise HTTPException(status_code=404, detail="Motif not found")
+    bps = storage.get_blueprints_for_motif(db, motif_id)
+    total = len(bps)
+    start = pagination["offset"]
+    end = start + pagination["limit"]
+    page_bps = bps[start:end]
+    data = [BlueprintSummaryResponse.model_validate(bp).model_dump() for bp in page_bps]
+    return envelope(data, total=total, page=pagination["page"], per_page=pagination["per_page"])

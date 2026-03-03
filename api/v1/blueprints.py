@@ -1,39 +1,92 @@
-# api/v1/blueprints.py
-#
-# TODO: Blueprint collection and detail endpoints.
-#
-# Endpoints:
-#
-# GET /v1/blueprints
-#   - Accepts: ?filter=..., ?page=, ?per_page=
-#   - Filter fields: final_product (item name), efficiency (float with operator), flag (flag name),
-#     source_site, game_version, has_cycle (bool), is_self_contained (bool).
-#   - Returns: response envelope with list of blueprint summaries (not full decoded_json).
-#   - Always include flags array in each blueprint object.
-#
-# GET /v1/blueprints/{id}
-#   - Returns: full blueprint record including decoded_json, flags, and summary.
-#   - 404 if not found.
-#
-# GET /v1/blueprints/{id}/graph
-#   - Returns: the crafting graph for this blueprint as a node/edge list.
-#   - Nodes: item names with produced_internally, consumed_internally attributes.
-#   - Edges: recipe_name, machine_count, machine_type, source_item, target_item.
-#   - Include final_products, raw_inputs, intermediates, is_self_contained, has_cycle.
-#
-# GET /v1/blueprints/{id}/ratios
-#   - Returns: ratio analysis results (ideal_ratio, actual_ratio, efficiency per recipe pair).
-#   - Ratios serialised as floats (Fraction computed internally, serialised here).
-#
-# GET /v1/blueprints/{id}/throughput
-#   - Returns: actual_output_rate, bottleneck_entity, bottleneck_type, lane_saturation.
-#
-# GET /v1/blueprints/{id}/motifs
-#   - Returns: list of motifs found in this blueprint (via blueprint_motifs junction table).
+"""Blueprint collection and detail endpoints."""
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
-from fastapi import APIRouter
+import storage
+from api.dependencies import envelope, get_db, paginate, parse_filter_string
+from api.v1.schemas import BlueprintDetailResponse, BlueprintSummaryResponse
 
 router = APIRouter(prefix="/blueprints", tags=["blueprints"])
 
-# TODO: implement all route handlers
+
+@router.get("")
+def list_blueprints(
+    filters: dict = Depends(parse_filter_string),
+    pagination: dict = Depends(paginate),
+    db: Session = Depends(get_db),
+):
+    """List blueprints with optional filters and pagination."""
+    bps, total = storage.list_blueprints(
+        db, filters=filters, offset=pagination["offset"], limit=pagination["limit"],
+    )
+    data = [BlueprintSummaryResponse.model_validate(bp).model_dump() for bp in bps]
+    return envelope(data, total=total, page=pagination["page"], per_page=pagination["per_page"])
+
+
+@router.get("/{blueprint_id}")
+def get_blueprint(blueprint_id: str, db: Session = Depends(get_db)):
+    """Get full blueprint by ID."""
+    bp = storage.get_blueprint(db, blueprint_id)
+    if bp is None:
+        raise HTTPException(status_code=404, detail="Blueprint not found")
+    data = BlueprintDetailResponse.model_validate(bp).model_dump()
+    warnings = [f["flag"] for f in (bp.flags or [])]
+    return envelope(data, warnings=warnings)
+
+
+@router.get("/{blueprint_id}/graph")
+def get_blueprint_graph(blueprint_id: str, db: Session = Depends(get_db)):
+    """Get crafting graph for a blueprint."""
+    bp = storage.get_blueprint(db, blueprint_id)
+    if bp is None:
+        raise HTTPException(status_code=404, detail="Blueprint not found")
+    summary = bp.summary or {}
+    graph = summary.get("crafting_graph", {})
+    warnings = [f["flag"] for f in (bp.flags or [])]
+    return envelope(graph, warnings=warnings)
+
+
+@router.get("/{blueprint_id}/ratios")
+def get_blueprint_ratios(blueprint_id: str, db: Session = Depends(get_db)):
+    """Get ratio analysis for a blueprint."""
+    bp = storage.get_blueprint(db, blueprint_id)
+    if bp is None:
+        raise HTTPException(status_code=404, detail="Blueprint not found")
+    summary = bp.summary or {}
+    ratios = summary.get("ratios", {})
+    warnings = [f["flag"] for f in (bp.flags or [])]
+    return envelope(ratios, warnings=warnings)
+
+
+@router.get("/{blueprint_id}/throughput")
+def get_blueprint_throughput(blueprint_id: str, db: Session = Depends(get_db)):
+    """Get throughput analysis for a blueprint."""
+    bp = storage.get_blueprint(db, blueprint_id)
+    if bp is None:
+        raise HTTPException(status_code=404, detail="Blueprint not found")
+    summary = bp.summary or {}
+    throughput = summary.get("throughput", {})
+    warnings = [f["flag"] for f in (bp.flags or [])]
+    return envelope(throughput, warnings=warnings)
+
+
+@router.get("/{blueprint_id}/motifs")
+def get_blueprint_motifs(blueprint_id: str, db: Session = Depends(get_db)):
+    """Get motifs found in a blueprint."""
+    bp = storage.get_blueprint(db, blueprint_id)
+    if bp is None:
+        raise HTTPException(status_code=404, detail="Blueprint not found")
+    motif_links = bp.motifs or []
+    data = []
+    for link in motif_links:
+        motif = link.motif
+        data.append({
+            "motif_id": motif.id,
+            "canonical_hash": motif.canonical_hash,
+            "category": motif.category,
+            "entity_count": motif.entity_count,
+            "position_context": link.position_context,
+        })
+    warnings = [f["flag"] for f in (bp.flags or [])]
+    return envelope(data, warnings=warnings)

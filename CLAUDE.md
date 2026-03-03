@@ -39,10 +39,9 @@ factorio-blueprint-analyser/
 ├── scraper/                   # One module per source
 │   ├── __init__.py
 │   ├── base.py                # Base scraper class with resumability, rate limiting
-│   ├── factorio_prints.py
-│   ├── factorio_school.py
+│   ├── factorio_prints.py     # Firebase REST client (covers factorio.school too)
 │   ├── reddit.py              # Uses PRAW
-│   └── forums.py              # Uses Playwright
+│   └── forums.py              # httpx + BeautifulSoup (phpBB)
 │
 ├── pipeline/                  # Core processing pipeline
 │   ├── __init__.py
@@ -51,7 +50,8 @@ factorio-blueprint-analyser/
 │   ├── version_filter.py      # Version unpacking, modded rejection
 │   ├── broken_detector.py     # Detects non-functional blueprints
 │   ├── recipe_inference.py    # Infers missing recipes from context
-│   └── review_queue.py        # Manual review queue for unresolvable blueprints
+│   ├── review_queue.py        # Review queue (DB-backed in Step 13+)
+│   └── orchestrator.py        # Full pipeline: decode → analyse → store
 │
 ├── analysis/                  # Analysis modules
 │   ├── __init__.py
@@ -71,15 +71,21 @@ factorio-blueprint-analyser/
 │   ├── database.py            # Connection, session management
 │   └── migrations/            # Schema migrations
 │
+├── cli.py                     # Typer CLI entry points
+├── __main__.py                # python -m greenprint support
+│
 ├── api/                       # REST API (FastAPI)
 │   ├── __init__.py
 │   ├── main.py
 │   ├── dependencies.py        # Shared dependencies, rate limiting
 │   └── v1/
+│       ├── __init__.py        # Router aggregation
+│       ├── schemas.py         # Pydantic response models
 │       ├── blueprints.py
 │       ├── motifs.py
 │       ├── recipes.py
-│       └── analysis.py
+│       ├── analysis.py
+│       └── review_queue.py    # Review queue endpoints (separate from analysis)
 │
 └── tests/
     ├── fixtures/              # Sample blueprint strings for testing
@@ -107,8 +113,8 @@ tests passing.
 6. Recipe inference and review queue
 7. Crafting graph analyser
 8. Ratio analyser
-9. Throughput analyser
-10. Lane model
+9. Lane model
+10. Throughput analyser (depends on lane model)
 11. Motif extractor and canonicaliser
 12. Motif catalogue
 13. Database models and storage layer
@@ -389,15 +395,17 @@ All scrapers extend a base class providing:
 
 ### Per-Source Notes
 
-**Factorio Prints:** Paginated API-style endpoints. Largest source. Use HTTP requests.
-
-**factorio.school:** Clean structure. Use HTTP requests.
+**Factorio Prints / factorio.school:** These are the same database — a single Firebase Realtime
+Database backend (project `facorio-blueprints`, note the typo). `factorio_prints.py` is a Firebase
+REST client, not an HTML scraper. There is no separate `factorio_school.py`. Use 0.5–1s delay
+between requests (Firebase is a paid service for the site owner).
 
 **Reddit (r/factorio):** Use PRAW. Rate limit is 60 requests/minute. Search for posts containing
-blueprint strings. Extract from post body and comments.
+blueprint strings. Extract from post body and comments. Credentials via `.env` (see `.env.example`).
 
-**Factorio Forums:** Static HTML but complex structure. Use BeautifulSoup. Some pages may need
-Playwright for JS rendering.
+**Factorio Forums:** phpBB — fully server-rendered HTML. Use `httpx` + `BeautifulSoup` only (no
+Playwright needed). Target subforums: Show your Creations (f=8), Mechanical Throughput Magic
+(f=194), Combinator Creations (f=193).
 
 ### String Extraction Regex
 
@@ -407,6 +415,21 @@ Blueprint strings start with `0` followed by base64 characters. Account for:
 - Surrounding whitespace
 
 ---
+
+## Storage Layer
+
+All UUIDs are generated in Python via `uuid.uuid4()` (not by the database) for SQLite/PostgreSQL
+portability. Use `String(36)` columns. Use `JSON` type (becomes JSONB on PostgreSQL automatically).
+
+Use `create_all()` for schema creation during development. Alembic migrations will be configured
+before first public deployment (the `migrations/` directory is scaffolded for this).
+
+### Author Anonymisation
+
+Author anonymisation happens at a single chokepoint: `save_blueprint()` in `storage/__init__.py`.
+The `author_raw` parameter (a username string) is converted to `author_hash` (SHA-256 hex digest)
+before anything touches the database. The `Blueprint` model has no `author_raw` column. The API
+response schemas must not include `author_hash` either — it is stored but never exposed.
 
 ## Storage Schema
 
@@ -419,7 +442,7 @@ Blueprint strings start with `0` followed by base64 characters. Account for:
 | `raw_string` | TEXT | Original encoded string |
 | `decoded_json` | JSONB | Full decoded blueprint |
 | `source_url` | TEXT | Where it was scraped from |
-| `source_site` | TEXT | `factorio_prints` \| `factorio_school` \| `reddit` \| `forums` |
+| `source_site` | TEXT | `factorio_prints` \| `reddit` \| `forums` |
 | `author_hash` | TEXT | Anonymised author identifier (one-way hash of username) |
 | `scraped_at` | TIMESTAMP | |
 | `game_version` | TEXT | e.g. `"1.1.57"` |
@@ -507,7 +530,7 @@ GET  /v1/recipes
 GET  /v1/recipes/{name}
 
 POST /v1/analysis/compare       — body: list of blueprint IDs
-POST /v1/analysis/search        — body: blueprint string, returns similar blueprints
+POST /v1/analysis/search        — body: blueprint string, returns similar (max 500 entities, 5s timeout)
 GET  /v1/analysis/stats         — dataset-level statistics
 
 GET  /v1/review-queue           — list unresolved items
@@ -516,6 +539,30 @@ POST /v1/review-queue/{id}      — submit resolution
 
 Rate limiting: apply per IP from day one. Flags are always included in responses — never silently
 hidden.
+
+---
+
+## Pipeline Orchestrator
+
+Single entry point: `process_string(raw, source_url, source_site, author_raw) → PipelineResult`.
+
+Stages run sequentially. Non-critical stage failures are caught, logged, and flagged — the pipeline
+continues. Only decode, validate, version/mod check, and save failures abort the pipeline.
+
+`Fraction` values from ratio/throughput analysis are converted to `float` at the storage boundary
+via `_serialise_summary()` in the orchestrator. Analysis modules keep exact `Fraction` values
+internally.
+
+`PipelineResult` is a dataclass with: `success`, `blueprint_ids`, `rejected`,
+`rejection_reason`, `flags`, `review_queue_items`, `errors`.
+
+---
+
+## CLI
+
+Typer-based CLI at `cli.py`, invoked via `python -m greenprint`. Subcommands: `scrape`, `ingest`,
+`analyse`, `review`, `serve` (starts uvicorn), `stats`. Each subcommand delegates to the
+underlying function — no logic in CLI handlers.
 
 ---
 
@@ -542,6 +589,7 @@ Tests are deterministic — no network calls, no runtime reference data fetching
 - Blueprint books are **always** dissolved — never stored or analysed as a unit
 - Modded blueprints are **always** rejected at decode time
 - The reference dataset is **never** fetched at runtime
-- Author usernames are **never** exposed in any API response — only the anonymised hash
-- All ratios are stored as `fractions.Fraction` internally before serialisation
+- Author usernames are **never** exposed in any API response — not even the anonymised hash
+- All ratios are stored as `fractions.Fraction` internally, converted to `float` only at storage boundary
 - Direct machine-to-machine inserter connections are a first-class motif type, not an edge case
+- factorioprints.com and factorio.school are the same database — only one scraper needed

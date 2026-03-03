@@ -1,6 +1,14 @@
-# scraper/__init__.py
-#
-# TODO: Export the public scraper API.
-# - Import and expose BaseScraper plus each concrete scraper class so callers can do:
-#     from scraper import FactorioPrintsScraper, RedditScraper, etc.
-# - Keep this file thin — no logic here.
+"""Scraper package — exports all concrete scrapers."""
+
+from scraper.base import BaseScraper, extract_blueprint_strings
+from scraper.factorio_prints import FactorioPrintsScraper
+from scraper.forums import ForumsScraper
+from scraper.reddit import RedditScraper
+
+__all__ = [
+    "BaseScraper",
+    "extract_blueprint_strings",
+    "FactorioPrintsScraper",
+    "ForumsScraper",
+    "RedditScraper",
+]

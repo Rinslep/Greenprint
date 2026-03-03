@@ -1,53 +1,132 @@
-# storage/models.py
-#
-# TODO: SQLAlchemy ORM models for all four tables.
-#
-# Table: blueprints
-#   id              UUID, primary key (use uuid.uuid4)
-#   raw_string_hash TEXT, unique, not null  — SHA256 of the original encoded string
-#   raw_string      TEXT, not null
-#   decoded_json    JSONB (use sqlalchemy.dialects.postgresql.JSONB; fall back to JSON for SQLite)
-#   source_url      TEXT
-#   source_site     TEXT  — 'factorio_prints' | 'factorio_school' | 'reddit' | 'forums'
-#   author_hash     TEXT  — one-way SHA256 of the raw username; NEVER store the username
-#   scraped_at      TIMESTAMP WITH TIME ZONE, default now()
-#   game_version    TEXT  — e.g. '1.1.57'
-#   game_version_int BIGINT
-#   source_book_id  UUID, nullable, FK → blueprints.id
-#   similar_to_id   UUID, nullable, FK → blueprints.id
-#   flags           JSONB — list of {flag, severity, detail} dicts
-#   summary         JSONB — compact computed summary (crafting graph, ratios, throughput)
-#
-# Table: motifs
-#   id                  UUID, primary key
-#   canonical_hash      TEXT, unique, not null
-#   canonical_entities  JSONB
-#   occurrence_count    INT, default 0
-#   category            TEXT — 'DIRECT' | 'SIMPLE' | 'UNDERGROUND' | 'SPLIT' | 'MERGED'
-#   source_recipes      JSONB
-#   dest_recipes        JSONB
-#   belt_type           TEXT, nullable
-#   uses_underground    BOOL
-#   uses_splitter       BOOL
-#   entity_count        INT
-#   first_seen_at       TIMESTAMP WITH TIME ZONE
-#   example_blueprint_id UUID, FK → blueprints.id
-#
-# Table: blueprint_motifs (junction)
-#   id              UUID, primary key
-#   blueprint_id    UUID, FK → blueprints.id, not null
-#   motif_id        UUID, FK → motifs.id, not null
-#   position_context JSONB — position within the blueprint where this motif appears
-#
-# Table: review_queue
-#   id              UUID, primary key
-#   blueprint_id    UUID, FK → blueprints.id
-#   entity_number   INT
-#   context         JSONB — {adjacent_items, candidate_recipes, confidence}
-#   resolved        BOOL, default False
-#   resolution      TEXT, nullable — recipe name or 'REJECTED'
-#   resolved_at     TIMESTAMP WITH TIME ZONE, nullable
-#
-# Use SQLAlchemy 2.0 declarative style (DeclarativeBase).
-# All UUID columns should use the UUID type with as_uuid=True.
-# Add indexes on: raw_string_hash, source_site, scraped_at, canonical_hash, resolved.
+"""SQLAlchemy ORM models for the Greenprint database."""
+
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Blueprint(Base):
+    __tablename__ = "blueprints"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    raw_string_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    raw_string: Mapped[str] = mapped_column(Text, nullable=False)
+    decoded_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_site: Mapped[str | None] = mapped_column(Text, nullable=True)
+    author_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scraped_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, default=lambda: datetime.now(timezone.utc)
+    )
+    game_version: Mapped[str | None] = mapped_column(Text, nullable=True)
+    game_version_int: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    source_book_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("blueprints.id"), nullable=True
+    )
+    similar_to_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("blueprints.id"), nullable=True
+    )
+    flags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    motifs: Mapped[list["BlueprintMotif"]] = relationship(
+        back_populates="blueprint",
+        cascade="all, delete-orphan",
+        foreign_keys="BlueprintMotif.blueprint_id",
+    )
+    review_items: Mapped[list["ReviewQueueItem"]] = relationship(
+        back_populates="blueprint",
+        cascade="all, delete-orphan",
+        foreign_keys="ReviewQueueItem.blueprint_id",
+    )
+
+    __table_args__ = (
+        Index("ix_blueprints_source_site", "source_site"),
+        Index("ix_blueprints_scraped_at", "scraped_at"),
+    )
+
+
+class Motif(Base):
+    __tablename__ = "motifs"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    canonical_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    canonical_entities: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=0)
+    category: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_recipes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    dest_recipes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    belt_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uses_underground: Mapped[bool] = mapped_column(Boolean, default=False)
+    uses_splitter: Mapped[bool] = mapped_column(Boolean, default=False)
+    entity_count: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, default=lambda: datetime.now(timezone.utc)
+    )
+    example_blueprint_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("blueprints.id"), nullable=True
+    )
+
+    blueprints: Mapped[list["BlueprintMotif"]] = relationship(
+        back_populates="motif", cascade="all, delete-orphan"
+    )
+
+
+class BlueprintMotif(Base):
+    __tablename__ = "blueprint_motifs"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    blueprint_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("blueprints.id"), nullable=False
+    )
+    motif_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("motifs.id"), nullable=False
+    )
+    position_context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    blueprint: Mapped["Blueprint"] = relationship(back_populates="motifs")
+    motif: Mapped["Motif"] = relationship(back_populates="blueprints")
+
+
+class ReviewQueueItem(Base):
+    __tablename__ = "review_queue_items"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    blueprint_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("blueprints.id"), nullable=False
+    )
+    entity_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    resolution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    blueprint: Mapped["Blueprint"] = relationship(back_populates="review_items")
+
+    __table_args__ = (
+        Index("ix_review_queue_items_resolved", "resolved"),
+    )

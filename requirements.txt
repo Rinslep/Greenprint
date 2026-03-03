@@ -1,29 +1,28 @@
-# requirements.txt
-#
-# TODO: Pin all versions once confirmed working together.
-#
 # Core pipeline
-# - pydantic>=2.0           — schema validation models
-# - pydantic-settings        — settings/config management
-# - python-dotenv            — .env support in dev
-# - networkx                 — crafting graph and lane model (DiGraph, find_cycle)
-# - sqlalchemy>=2.0          — ORM for blueprints, motifs, review_queue tables
-# - alembic                  — database migrations
-# - psycopg2-binary          — PostgreSQL driver (production); sqlite3 is stdlib for dev
-#
+pydantic>=2.0
+pydantic-settings>=2.0
+python-dotenv>=1.0
+networkx>=3.0
+sqlalchemy>=2.0
+alembic>=1.12
+
+# Logging
+structlog>=23.0
+rich>=13.0
+
 # API
-# - fastapi                  — REST API framework
-# - uvicorn[standard]        — ASGI server
-# - slowapi                  — per-IP rate limiting middleware for FastAPI
-#
+fastapi>=0.100
+uvicorn[standard]>=0.23
+slowapi>=0.1.9
+
 # Scrapers
-# - requests                 — HTTP for factorio_prints and factorio_school
-# - beautifulsoup4           — HTML parsing for forums scraper
-# - praw                     — Reddit API client
-# - playwright               — JS-rendered pages on forums (install chromium separately)
-# - robotparser              — stdlib, but confirm it's accessible as urllib.robotparser
-#
+httpx>=0.25
+beautifulsoup4>=4.12
+praw>=7.7
+
+# CLI
+typer>=0.9
+
 # Testing
-# - pytest
-# - pytest-cov
-# - httpx                    — async test client for FastAPI
+pytest>=7.0
+pytest-cov>=4.0

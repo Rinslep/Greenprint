@@ -1,28 +1,700 @@
 [
   {
-    "_comment": "Full vanilla Factorio 1.1.110 entity metadata. Include every entity that can appear in a blueprint.",
-    "_todo": [
-      "Populate from the Factorio 1.1.110 data export.",
-      "Include ALL entity types: machines, belts, inserters, poles, chests, splitters, undergrounds,",
-      "  loaders, beacons, roboports, walls, gates, rails, train stops, pumps, pipes, storage tanks, labs, silos.",
-      "Per-entity fields (only include fields relevant to the entity type):",
-      "  name: string (internal entity name)",
-      "  size: [width, height] (tile footprint)",
-      "  crafting_speed: number (assemblers, furnaces — multiplier on recipe crafting_time)",
-      "  module_slots: integer",
-      "  energy_consumption_kw: number",
-      "  belt_speed: number (items/sec/lane — transport-belt=7.5, fast=15, express=22.5)",
-      "  underground_max_distance: integer (includes both end tiles)",
-      "  inserter_reach: integer (tiles — standard=1, long-handed=2)",
-      "  inserter_swing_speed: number (swings/sec)",
-      "  inserter_stack_size: integer (default stack, before stack size research bonuses)",
-      "  inserter_filter: boolean",
-      "  pole_supply_area: number (tile radius)",
-      "  pole_wire_reach: number (tile distance)",
-      "  splitter_has_filter: boolean",
-      "  splitter_has_priority: boolean",
-      "Belt tier speeds are critical for throughput analysis — double-check against game source.",
-      "Strip modded entities — only vanilla 1.1."
+    "name": "boiler",
+    "size": [
+      3,
+      2
+    ],
+    "crafting_speed": 1800,
+    "energy_consumption_kw": 1800
+  },
+  {
+    "name": "nuclear-reactor",
+    "size": [
+      5,
+      5
+    ],
+    "crafting_speed": 1,
+    "energy_consumption_kw": 40000
+  },
+  {
+    "name": "heat-exchanger",
+    "size": [
+      3,
+      2
+    ],
+    "crafting_speed": 10000,
+    "energy_consumption_kw": 10000
+  },
+  {
+    "name": "burner-mining-drill",
+    "size": [
+      2,
+      2
+    ],
+    "crafting_speed": 0.25,
+    "energy_consumption_kw": 150
+  },
+  {
+    "name": "electric-mining-drill",
+    "size": [
+      3,
+      3
+    ],
+    "crafting_speed": 0.5,
+    "module_slots": 3,
+    "energy_consumption_kw": 90
+  },
+  {
+    "name": "offshore-pump",
+    "size": [
+      1,
+      2
+    ],
+    "crafting_speed": 1
+  },
+  {
+    "name": "pumpjack",
+    "size": [
+      3,
+      3
+    ],
+    "crafting_speed": 1,
+    "module_slots": 2,
+    "energy_consumption_kw": 90
+  },
+  {
+    "name": "stone-furnace",
+    "size": [
+      2,
+      2
+    ],
+    "crafting_speed": 1,
+    "energy_consumption_kw": 90
+  },
+  {
+    "name": "steel-furnace",
+    "size": [
+      2,
+      2
+    ],
+    "crafting_speed": 2,
+    "energy_consumption_kw": 90
+  },
+  {
+    "name": "electric-furnace",
+    "size": [
+      3,
+      3
+    ],
+    "crafting_speed": 2,
+    "module_slots": 2,
+    "energy_consumption_kw": 180
+  },
+  {
+    "name": "assembling-machine-1",
+    "size": [
+      3,
+      3
+    ],
+    "crafting_speed": 0.5,
+    "energy_consumption_kw": 75
+  },
+  {
+    "name": "assembling-machine-2",
+    "size": [
+      3,
+      3
+    ],
+    "crafting_speed": 0.75,
+    "module_slots": 2,
+    "energy_consumption_kw": 150
+  },
+  {
+    "name": "assembling-machine-3",
+    "size": [
+      3,
+      3
+    ],
+    "crafting_speed": 1.25,
+    "module_slots": 4,
+    "energy_consumption_kw": 375
+  },
+  {
+    "name": "oil-refinery",
+    "size": [
+      5,
+      5
+    ],
+    "crafting_speed": 1,
+    "module_slots": 3,
+    "energy_consumption_kw": 420
+  },
+  {
+    "name": "chemical-plant",
+    "size": [
+      3,
+      3
+    ],
+    "crafting_speed": 1,
+    "module_slots": 3,
+    "energy_consumption_kw": 210
+  },
+  {
+    "name": "centrifuge",
+    "size": [
+      3,
+      3
+    ],
+    "crafting_speed": 1,
+    "module_slots": 2,
+    "energy_consumption_kw": 350
+  },
+  {
+    "name": "lab",
+    "size": [
+      3,
+      3
+    ],
+    "crafting_speed": 1,
+    "module_slots": 2,
+    "energy_consumption_kw": 60
+  },
+  {
+    "name": "rocket-silo",
+    "size": [
+      9,
+      9
+    ],
+    "crafting_speed": 1,
+    "module_slots": 4,
+    "energy_consumption_kw": 250
+  },
+  {
+    "name": "beacon",
+    "size": [
+      3,
+      3
+    ],
+    "module_slots": 2,
+    "energy_consumption_kw": 480,
+    "beacon_effectivity": 0.5,
+    "beacon_range": 3
+  },
+  {
+    "name": "transport-belt",
+    "size": [
+      1,
+      1
+    ],
+    "belt_speed": 7.5
+  },
+  {
+    "name": "fast-transport-belt",
+    "size": [
+      1,
+      1
+    ],
+    "belt_speed": 15.0
+  },
+  {
+    "name": "express-transport-belt",
+    "size": [
+      1,
+      1
+    ],
+    "belt_speed": 22.5
+  },
+  {
+    "name": "underground-belt",
+    "size": [
+      1,
+      1
+    ],
+    "belt_speed": 7.5,
+    "underground_max_distance": 5
+  },
+  {
+    "name": "fast-underground-belt",
+    "size": [
+      1,
+      1
+    ],
+    "belt_speed": 15.0,
+    "underground_max_distance": 7
+  },
+  {
+    "name": "express-underground-belt",
+    "size": [
+      1,
+      1
+    ],
+    "belt_speed": 22.5,
+    "underground_max_distance": 9
+  },
+  {
+    "name": "splitter",
+    "size": [
+      2,
+      1
+    ],
+    "belt_speed": 7.5,
+    "splitter_has_filter": true,
+    "splitter_has_priority": true
+  },
+  {
+    "name": "fast-splitter",
+    "size": [
+      2,
+      1
+    ],
+    "belt_speed": 15.0,
+    "splitter_has_filter": true,
+    "splitter_has_priority": true
+  },
+  {
+    "name": "express-splitter",
+    "size": [
+      2,
+      1
+    ],
+    "belt_speed": 22.5,
+    "splitter_has_filter": true,
+    "splitter_has_priority": true
+  },
+  {
+    "name": "burner-inserter",
+    "size": [
+      1,
+      1
+    ],
+    "inserter_reach": 1,
+    "inserter_swing_speed": 0.6,
+    "inserter_stack_size": 1,
+    "inserter_filter": false,
+    "energy_consumption_kw": 94
+  },
+  {
+    "name": "inserter",
+    "size": [
+      1,
+      1
+    ],
+    "inserter_reach": 1,
+    "inserter_swing_speed": 0.83,
+    "inserter_stack_size": 1,
+    "inserter_filter": false,
+    "energy_consumption_kw": 13
+  },
+  {
+    "name": "long-handed-inserter",
+    "size": [
+      1,
+      1
+    ],
+    "inserter_reach": 2,
+    "inserter_swing_speed": 1.2,
+    "inserter_stack_size": 1,
+    "inserter_filter": false,
+    "energy_consumption_kw": 18
+  },
+  {
+    "name": "fast-inserter",
+    "size": [
+      1,
+      1
+    ],
+    "inserter_reach": 1,
+    "inserter_swing_speed": 2.31,
+    "inserter_stack_size": 1,
+    "inserter_filter": false,
+    "energy_consumption_kw": 46
+  },
+  {
+    "name": "filter-inserter",
+    "size": [
+      1,
+      1
+    ],
+    "inserter_reach": 1,
+    "inserter_swing_speed": 2.31,
+    "inserter_stack_size": 1,
+    "inserter_filter": true,
+    "energy_consumption_kw": 46
+  },
+  {
+    "name": "stack-inserter",
+    "size": [
+      1,
+      1
+    ],
+    "inserter_reach": 1,
+    "inserter_swing_speed": 2.31,
+    "inserter_stack_size": 12,
+    "inserter_filter": false,
+    "energy_consumption_kw": 132
+  },
+  {
+    "name": "stack-filter-inserter",
+    "size": [
+      1,
+      1
+    ],
+    "inserter_reach": 1,
+    "inserter_swing_speed": 2.31,
+    "inserter_stack_size": 12,
+    "inserter_filter": true,
+    "energy_consumption_kw": 132
+  },
+  {
+    "name": "small-electric-pole",
+    "size": [
+      1,
+      1
+    ],
+    "pole_supply_area": 5,
+    "pole_wire_reach": 7.5
+  },
+  {
+    "name": "medium-electric-pole",
+    "size": [
+      1,
+      1
+    ],
+    "pole_supply_area": 7,
+    "pole_wire_reach": 9
+  },
+  {
+    "name": "big-electric-pole",
+    "size": [
+      2,
+      2
+    ],
+    "pole_supply_area": 4,
+    "pole_wire_reach": 30
+  },
+  {
+    "name": "substation",
+    "size": [
+      2,
+      2
+    ],
+    "pole_supply_area": 18,
+    "pole_wire_reach": 18
+  },
+  {
+    "name": "wooden-chest",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "iron-chest",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "steel-chest",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "logistic-chest-active-provider",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "logistic-chest-passive-provider",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "logistic-chest-storage",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "logistic-chest-buffer",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "logistic-chest-requester",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "pipe",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "pipe-to-ground",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "pump",
+    "size": [
+      1,
+      2
+    ],
+    "energy_consumption_kw": 30
+  },
+  {
+    "name": "storage-tank",
+    "size": [
+      3,
+      3
+    ]
+  },
+  {
+    "name": "roboport",
+    "size": [
+      4,
+      4
+    ],
+    "energy_consumption_kw": 50
+  },
+  {
+    "name": "arithmetic-combinator",
+    "size": [
+      1,
+      2
+    ]
+  },
+  {
+    "name": "decider-combinator",
+    "size": [
+      1,
+      2
+    ]
+  },
+  {
+    "name": "constant-combinator",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "programmable-speaker",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "power-switch",
+    "size": [
+      2,
+      2
+    ]
+  },
+  {
+    "name": "small-lamp",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "straight-rail",
+    "size": [
+      2,
+      2
+    ]
+  },
+  {
+    "name": "curved-rail",
+    "size": [
+      2,
+      2
+    ]
+  },
+  {
+    "name": "train-stop",
+    "size": [
+      2,
+      2
+    ]
+  },
+  {
+    "name": "rail-signal",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "rail-chain-signal",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "locomotive",
+    "size": [
+      2,
+      6
+    ]
+  },
+  {
+    "name": "cargo-wagon",
+    "size": [
+      2,
+      6
+    ]
+  },
+  {
+    "name": "fluid-wagon",
+    "size": [
+      2,
+      6
+    ]
+  },
+  {
+    "name": "artillery-wagon",
+    "size": [
+      2,
+      6
+    ]
+  },
+  {
+    "name": "stone-wall",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "gate",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "gun-turret",
+    "size": [
+      2,
+      2
+    ]
+  },
+  {
+    "name": "laser-turret",
+    "size": [
+      2,
+      2
+    ],
+    "energy_consumption_kw": 800
+  },
+  {
+    "name": "flamethrower-turret",
+    "size": [
+      2,
+      3
+    ]
+  },
+  {
+    "name": "artillery-turret",
+    "size": [
+      3,
+      3
+    ]
+  },
+  {
+    "name": "radar",
+    "size": [
+      3,
+      3
+    ],
+    "energy_consumption_kw": 300
+  },
+  {
+    "name": "solar-panel",
+    "size": [
+      3,
+      3
+    ]
+  },
+  {
+    "name": "accumulator",
+    "size": [
+      2,
+      2
+    ]
+  },
+  {
+    "name": "loader",
+    "size": [
+      1,
+      2
+    ],
+    "belt_speed": 7.5
+  },
+  {
+    "name": "fast-loader",
+    "size": [
+      1,
+      2
+    ],
+    "belt_speed": 15.0
+  },
+  {
+    "name": "express-loader",
+    "size": [
+      1,
+      2
+    ],
+    "belt_speed": 22.5
+  },
+  {
+    "name": "land-mine",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "heat-pipe",
+    "size": [
+      1,
+      1
+    ]
+  },
+  {
+    "name": "steam-engine",
+    "size": [
+      3,
+      5
+    ]
+  },
+  {
+    "name": "steam-turbine",
+    "size": [
+      3,
+      5
     ]
   }
 ]

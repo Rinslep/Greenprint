@@ -1,0 +1,101 @@
+[
+  {
+    "name": "speed-module",
+    "tier": 1,
+    "type": "speed",
+    "effect": {
+      "speed": 0.2,
+      "energy": 0.5,
+      "productivity": 0.0,
+      "pollution": 0.0
+    }
+  },
+  {
+    "name": "speed-module-2",
+    "tier": 2,
+    "type": "speed",
+    "effect": {
+      "speed": 0.3,
+      "energy": 0.6,
+      "productivity": 0.0,
+      "pollution": 0.0
+    }
+  },
+  {
+    "name": "speed-module-3",
+    "tier": 3,
+    "type": "speed",
+    "effect": {
+      "speed": 0.5,
+      "energy": 0.7,
+      "productivity": 0.0,
+      "pollution": 0.0
+    }
+  },
+  {
+    "name": "effectivity-module",
+    "tier": 1,
+    "type": "effectivity",
+    "effect": {
+      "speed": 0.0,
+      "energy": -0.3,
+      "productivity": 0.0,
+      "pollution": 0.0
+    }
+  },
+  {
+    "name": "effectivity-module-2",
+    "tier": 2,
+    "type": "effectivity",
+    "effect": {
+      "speed": 0.0,
+      "energy": -0.4,
+      "productivity": 0.0,
+      "pollution": 0.0
+    }
+  },
+  {
+    "name": "effectivity-module-3",
+    "tier": 3,
+    "type": "effectivity",
+    "effect": {
+      "speed": 0.0,
+      "energy": -0.5,
+      "productivity": 0.0,
+      "pollution": 0.0
+    }
+  },
+  {
+    "name": "productivity-module",
+    "tier": 1,
+    "type": "productivity",
+    "effect": {
+      "speed": -0.05,
+      "energy": 0.4,
+      "productivity": 0.04,
+      "pollution": 0.05
+    }
+  },
+  {
+    "name": "productivity-module-2",
+    "tier": 2,
+    "type": "productivity",
+    "effect": {
+      "speed": -0.1,
+      "energy": 0.6,
+      "productivity": 0.06,
+      "pollution": 0.07
+    }
+  },
+  {
+    "name": "productivity-module-3",
+    "tier": 3,
+    "type": "productivity",
+    "effect": {
+      "speed": -0.15,
+      "energy": 0.8,
+      "productivity": 0.1,
+      "pollution": 0.1
+    }
+  }
+]
