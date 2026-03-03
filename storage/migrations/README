@@ -1,0 +1,17 @@
+# storage/migrations/
+#
+# TODO: Alembic migration scripts live here.
+#
+# Setup steps (do this once):
+#   alembic init storage/migrations
+#   # Edit alembic.ini: set sqlalchemy.url = %(DB_URL)s (read from env)
+#   # Edit env.py: import Base from storage.models and set target_metadata = Base.metadata
+#
+# To create a new migration after changing models.py:
+#   alembic revision --autogenerate -m "describe the change"
+#
+# To apply migrations:
+#   alembic upgrade head
+#
+# Convention: migration file names must be descriptive (alembic --autogenerate handles naming).
+# Do not hand-edit migration files after they have been applied to any environment.

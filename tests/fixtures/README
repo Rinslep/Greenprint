@@ -1,0 +1,38 @@
+# tests/fixtures/
+#
+# TODO: Add the following blueprint string fixtures (plain text files, one string per file).
+# All fixtures must be deterministic — no network fetches, generated offline.
+#
+# Required fixtures:
+#
+# simple_valid.txt
+#   A small, known-content 1.1.110 blueprint with 2-3 assemblers and belts.
+#   Used in: test_decoder, test_validator, test_crafting_graph, test_ratio_analyser.
+#
+# blueprint_book.txt
+#   A blueprint book containing 2-3 nested blueprints.
+#   Used to verify: books are dissolved into children, source_book_id is set on each child.
+#
+# no_recipes.txt
+#   A blueprint with machines but no recipe fields set on any entity.
+#   Used to verify: recipe_inference runs and either resolves or queues for review.
+#
+# modded.txt
+#   A blueprint containing at least one entity or recipe name not in the vanilla 1.1 reference.
+#   Used to verify: MODDED_BLUEPRINT rejection fires.
+#
+# cycle.txt
+#   A blueprint where the crafting graph contains a cycle (e.g. oil processing loop).
+#   Used to verify: has_cycle is detected and flagged, not errored.
+#
+# splitters.txt
+#   A blueprint featuring splitters with filters and priority outputs.
+#   Used to verify: lane model and motif extraction handle splits correctly.
+#
+# corrupt.txt
+#   A truncated or malformed base64 string.
+#   Used to verify: DECODE_FAILURE is raised and logged correctly.
+#
+# direct_inserter.txt
+#   A blueprint with at least one machine-to-machine inserter connection (no belt between them).
+#   Used to verify: DIRECT motif type is extracted as a first-class case.

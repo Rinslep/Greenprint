@@ -1,0 +1,28 @@
+[
+  {
+    "_comment": "Full vanilla Factorio 1.1.110 entity metadata. Include every entity that can appear in a blueprint.",
+    "_todo": [
+      "Populate from the Factorio 1.1.110 data export.",
+      "Include ALL entity types: machines, belts, inserters, poles, chests, splitters, undergrounds,",
+      "  loaders, beacons, roboports, walls, gates, rails, train stops, pumps, pipes, storage tanks, labs, silos.",
+      "Per-entity fields (only include fields relevant to the entity type):",
+      "  name: string (internal entity name)",
+      "  size: [width, height] (tile footprint)",
+      "  crafting_speed: number (assemblers, furnaces — multiplier on recipe crafting_time)",
+      "  module_slots: integer",
+      "  energy_consumption_kw: number",
+      "  belt_speed: number (items/sec/lane — transport-belt=7.5, fast=15, express=22.5)",
+      "  underground_max_distance: integer (includes both end tiles)",
+      "  inserter_reach: integer (tiles — standard=1, long-handed=2)",
+      "  inserter_swing_speed: number (swings/sec)",
+      "  inserter_stack_size: integer (default stack, before stack size research bonuses)",
+      "  inserter_filter: boolean",
+      "  pole_supply_area: number (tile radius)",
+      "  pole_wire_reach: number (tile distance)",
+      "  splitter_has_filter: boolean",
+      "  splitter_has_priority: boolean",
+      "Belt tier speeds are critical for throughput analysis — double-check against game source.",
+      "Strip modded entities — only vanilla 1.1."
+    ]
+  }
+]

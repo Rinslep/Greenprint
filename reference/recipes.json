@@ -1,0 +1,18 @@
+[
+  {
+    "_comment": "Full vanilla Factorio 1.1.110 recipe list. Each entry must match the schema below exactly.",
+    "_todo": [
+      "Populate from the Factorio 1.1.110 data export (use factorio --dump-data or the wiki dump).",
+      "Every recipe that can be placed in an assembling machine, chemical plant, oil refinery,",
+      "  centrifuge, rocket silo, furnace, or lab must be present.",
+      "Schema per entry:",
+      "  name: string (internal recipe name, e.g. 'electronic-circuit')",
+      "  category: string (e.g. 'crafting', 'chemistry', 'smelting', 'rocket-building')",
+      "  crafting_time: number (seconds)",
+      "  inputs: [{name: string, amount: number}]",
+      "  outputs: [{name: string, amount: number}]",
+      "  valid_machines: [string] (entity names that can execute this recipe)",
+      "Strip any modded or space-age entries — only vanilla 1.1 recipes here."
+    ]
+  }
+]
