@@ -3,9 +3,16 @@
 from typing import Generator
 
 from fastapi import Query
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from config import settings
 from storage.database import get_session as _get_session
+
+# Single shared limiter instance — imported by main.py and all route files.
+limiter = Limiter(key_func=get_remote_address)
+RATE_LIMIT = f"{settings.api_rate_limit_per_minute}/minute"
 
 
 def get_db() -> Generator[Session, None, None]:

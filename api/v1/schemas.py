@@ -51,7 +51,15 @@ class MotifSummaryResponse(BaseModel):
     belt_type: str | None = None
     uses_underground: bool = False
     uses_splitter: bool = False
+    is_multi_destination: bool = False
     entity_count: int = 0
+    family_hash: str | None = None
+    family_occurrence_count: int = 0
+    elaboration_depth: int = 0
+    sub_motif_of_family: str | None = None
+    is_tileable: bool = False
+    tile_vector: dict | None = None
+    tile_count: int = 0
     first_seen_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -69,7 +77,15 @@ class MotifDetailResponse(BaseModel):
     belt_type: str | None = None
     uses_underground: bool = False
     uses_splitter: bool = False
+    is_multi_destination: bool = False
     entity_count: int = 0
+    family_hash: str | None = None
+    family_occurrence_count: int = 0
+    elaboration_depth: int = 0
+    sub_motif_of_family: str | None = None
+    is_tileable: bool = False
+    tile_vector: dict | None = None
+    tile_count: int = 0
     first_seen_at: datetime | None = None
     example_blueprint_id: str | None = None
 

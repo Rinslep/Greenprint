@@ -1,17 +1,19 @@
 """Blueprint collection and detail endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 import storage
-from api.dependencies import envelope, get_db, paginate, parse_filter_string
+from api.dependencies import RATE_LIMIT, envelope, get_db, limiter, paginate, parse_filter_string
 from api.v1.schemas import BlueprintDetailResponse, BlueprintSummaryResponse
 
 router = APIRouter(prefix="/blueprints", tags=["blueprints"])
 
 
 @router.get("")
+@limiter.limit(RATE_LIMIT)
 def list_blueprints(
+    request: Request,
     filters: dict = Depends(parse_filter_string),
     pagination: dict = Depends(paginate),
     db: Session = Depends(get_db),
@@ -25,7 +27,8 @@ def list_blueprints(
 
 
 @router.get("/{blueprint_id}")
-def get_blueprint(blueprint_id: str, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT)
+def get_blueprint(request: Request, blueprint_id: str, db: Session = Depends(get_db)):
     """Get full blueprint by ID."""
     bp = storage.get_blueprint(db, blueprint_id)
     if bp is None:
@@ -36,7 +39,8 @@ def get_blueprint(blueprint_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{blueprint_id}/graph")
-def get_blueprint_graph(blueprint_id: str, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT)
+def get_blueprint_graph(request: Request, blueprint_id: str, db: Session = Depends(get_db)):
     """Get crafting graph for a blueprint."""
     bp = storage.get_blueprint(db, blueprint_id)
     if bp is None:
@@ -48,7 +52,8 @@ def get_blueprint_graph(blueprint_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{blueprint_id}/ratios")
-def get_blueprint_ratios(blueprint_id: str, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT)
+def get_blueprint_ratios(request: Request, blueprint_id: str, db: Session = Depends(get_db)):
     """Get ratio analysis for a blueprint."""
     bp = storage.get_blueprint(db, blueprint_id)
     if bp is None:
@@ -60,7 +65,8 @@ def get_blueprint_ratios(blueprint_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{blueprint_id}/throughput")
-def get_blueprint_throughput(blueprint_id: str, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT)
+def get_blueprint_throughput(request: Request, blueprint_id: str, db: Session = Depends(get_db)):
     """Get throughput analysis for a blueprint."""
     bp = storage.get_blueprint(db, blueprint_id)
     if bp is None:
@@ -72,7 +78,8 @@ def get_blueprint_throughput(blueprint_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{blueprint_id}/motifs")
-def get_blueprint_motifs(blueprint_id: str, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT)
+def get_blueprint_motifs(request: Request, blueprint_id: str, db: Session = Depends(get_db)):
     """Get motifs found in a blueprint."""
     bp = storage.get_blueprint(db, blueprint_id)
     if bp is None:

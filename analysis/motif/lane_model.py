@@ -264,6 +264,9 @@ def build_lane_model(blueprint) -> nx.DiGraph:
                 out_node = (tile_out[0], tile_out[1], side)
                 if not G.has_node(in_node):
                     G.add_node(in_node, entity=splitter, node_type="belt_lane", belt_speed=belt_speed)
+                # Register out_node so downstream traversals can read its node_type.
+                if not G.has_node(out_node):
+                    G.add_node(out_node, entity=splitter, node_type="belt_lane", belt_speed=belt_speed)
                 edge_attrs = {"edge_type": "splitter"}
                 if spl_filter_item:
                     edge_attrs["filter_item"] = spl_filter_item

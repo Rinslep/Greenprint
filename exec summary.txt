@@ -1,0 +1,187 @@
+Executive Summary
+Greenprint is a well-structured Factorio blueprint pipeline — the architecture is sound, the invariants are documented, and the code style is consistent. The two most urgent issues are a broken data path between the recipe inference stage and the database-backed review queue (items are written to a legacy JSON file, never to the DB the API reads from), and a full-table memory scan in /v1/analysis/stats that will become expensive quickly. Beyond those, a handful of correctness bugs, deprecated API usage, and missing performance guards need attention before any public deployment.
+
+Findings by Category
+Security
+[medium] No authorization on POST /v1/review-queue/{id}
+api/v1/review_queue.py:33
+
+Any client that can reach the API can resolve review queue items (change inferred recipes). Rate limiting is the only protection. Before public deployment, add an API key or admin token check as a FastAPI dependency on write routes.
+
+[low] text() with f-string interpolation for the boolean case
+storage/init.py:49-58
+
+
+pg_val = "true" if value else "false"
+stmt = stmt.where(
+    text(f"(summary->'crafting_graph'->>'is_self_contained')::boolean = {pg_val}")
+)
+pg_val is string-interpolated directly into SQL. The value can only ever be "true" or "false" due to upstream bool coercion so there is no actual injection, but the pattern is fragile. Use .bindparams() or cast in Python instead.
+
+[low] Silent exception suppression in search hides abuse
+api/v1/analysis.py:87-88
+
+
+except Exception:
+    pass  # If extraction fails, query_hashes stays empty
+Swallowing all exceptions here makes it impossible to detect when a crafted blueprint string triggers a crash in the motif pipeline. At minimum log at WARNING level.
+
+Bugs and Correctness
+[high] Review queue items are written to a JSON file, not the database
+pipeline/recipe_inference.py:152-172 · api/v1/review_queue.py:26-30
+
+recipe_inference.py calls review_queue.add() from pipeline/review_queue.py (the old in-memory/JSON file module). The API reads from storage.list_review_queue() which queries ReviewQueueItem in the database. These two paths never intersect, so the review queue is always empty from the API's perspective. The DB-backed storage.add_review_item() is wired up but never called.
+
+Fix: In the orchestrator (after bp.id is known), call storage.add_review_item() for each item. The pipeline's infer_recipes() should return structured item dicts rather than directly calling the queue module.
+
+[medium] Blueprint book detection is fragile
+pipeline/orchestrator.py:101
+
+
+is_book = len(decoded_list) > 1
+A book containing exactly one child blueprint returns decoded_list of length 1, which sets is_book = False. The single child then uses the raw book string as its raw_hash and raw_string, not its own canonical hash. The correct detection is to inspect the decoded data for "blueprint_book" before dissolving, or have decode() return a flag alongside the list.
+
+[medium] blueprint_id passed to infer_recipes is a truncated hash, not a DB UUID
+pipeline/orchestrator.py:194
+
+
+inference_flags, review_queue_count = infer_recipes(wrapper, blueprint_id=raw_hash[:12])
+Recipe inference runs at Stage 5, before the blueprint is saved (Stage 9). The truncated hash raw_hash[:12] stored in review queue items has no FK relationship to anything in the DB. This is a secondary consequence of the review-queue/DB disconnect above, but fixing one requires fixing the other.
+
+[medium] session.bind is deprecated in SQLAlchemy 2.0
+storage/init.py:19
+
+
+return session.bind.dialect.name if session.bind else "sqlite"
+session.bind returns None in SQLAlchemy 2.0 when using the new Session(bind=engine) pattern. The fallback to "sqlite" means all PostgreSQL dialect-specific JSON queries would silently run the SQLite variant. Use session.get_bind().dialect.name or inspect the engine URL directly.
+
+[medium] Double commit in review queue resolution endpoint
+api/v1/review_queue.py:44-46
+
+
+item = storage.resolve_review_item(db, item_id, body.resolution)
+db.commit()  # explicit commit here
+# ... then get_db() context manager also commits on exit
+storage.resolve_review_item() calls session.flush(). The explicit db.commit() here is then followed by a second commit from the get_db() context manager. It's harmless currently but will cause confusion when exceptions need to be handled. Remove the manual db.commit() and let the context manager handle it.
+
+[low] _get_machine_tiles over-generates tiles for even-width entities
+pipeline/recipe_inference.py:46-55
+
+
+for dx in range(-(w // 2), w // 2 + 1):
+For a 2×2 entity, w // 2 = 1, giving range(-1, 2) = 3 steps, not 2. All current Factorio production machines are odd-sized (1×1, 3×3, 5×5) so this never causes a wrong inference in practice, but it would for loaders, trains, etc. The correct range for even widths requires handling the half-tile offset.
+
+[low] _process_string in BaseScraper computes a hash it never uses
+scraper/base.py:162-171
+
+
+raw_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+if self._on_new_blueprint:
+    self._on_new_blueprint(...)
+raw_hash is computed but never used after that line. The dedup check exists inside the orchestrator's process_string(), but the scraper has no local guard. A URL that's been fetched is marked, but the same blueprint string appearing on multiple URLs is re-queued each time. The orchestrator handles this correctly via DB dedup, so it's not a data integrity bug — but it does cause redundant pipeline work.
+
+Performance
+[high] dataset_stats loads up to 10,000 blueprints into memory
+api/v1/analysis.py:122-131
+
+
+bps, _ = storage.list_blueprints(db, limit=10000)
+by_site: dict[str, int] = {}
+flag_dist: dict[str, int] = {}
+for bp in bps:
+    ...
+This is an O(N) memory load for computing two aggregate counts. Once the database exceeds 10,000 rows it silently truncates results, giving wrong totals. Replace with a GROUP BY source_site query and a JSON-aware aggregate for flags.
+
+[high] get_blueprint_motif_hashes is an unbounded full table scan
+storage/init.py:345-357 · api/v1/analysis.py:91
+
+The search endpoint loads all (blueprint_id, canonical_hash) pairs from the junction table into a Python dict for every search request. With 100 blueprints × 50 motifs each, that's 5,000 rows — manageable now. At production scale (100,000 blueprints), this is 5M+ rows loaded per search. The similarity search needs either a vector index or a pre-filtered candidate set (e.g., only blueprints sharing at least one motif hash with the query).
+
+[medium] BaseScraper opens a new SQLite connection for every URL check
+scraper/base.py:81-97
+
+Every call to _is_fetched and _mark_fetched opens and closes a new sqlite3.connect(). For a scraper processing 10,000 URLs this is 20,000 connection open/close cycles. Use a persistent connection stored in self._progress_conn.
+
+[medium] No limit on blueprint_ids in /v1/analysis/compare
+api/v1/analysis.py:23-39
+
+The CompareRequest accepts an unbounded list[str]. A client can request thousands of blueprints in a single call. Add max_items=20 or similar via a Pydantic field validator.
+
+[low] Motif upsert is N individual round-trips
+storage/init.py:165-247
+
+For each of N motifs extracted from a blueprint, there's a SELECT + INSERT or UPDATE. For blueprints with many unique motifs, this serializes poorly. An INSERT ... ON CONFLICT DO UPDATE (upsert) would reduce this to a single statement per motif with no prior SELECT needed.
+
+[low] No index on frequently-filtered columns
+storage/models.py
+
+game_version, source_book_id, similar_to_id, and author_hash have no indexes despite being natural filter and join targets. The raw_string_hash unique constraint creates an implicit index. Add explicit indexes for at least game_version and source_book_id.
+
+Design and Architecture
+[medium] Two logging systems used inconsistently
+
+decoder.py, validator.py, version_filter.py, and recipe_inference.py use structlog. orchestrator.py, scraper/base.py, and broken_detector.py use logging (stdlib). Pick one. Since structlog is already a dependency and configured via logging_config.py, the stdlib calls should be migrated.
+
+[medium] pipeline/review_queue.py should be deleted, not left as dead code
+pipeline/review_queue.py
+
+The module docstring itself says "Temporary measure — replaced by the database in Step 13." Step 13 (storage layer) is implemented. The file persists and is still imported by recipe_inference.py. Leaving it in place creates confusion about which queue is canonical and causes the correctness bug listed above.
+
+[medium] _process_single in orchestrator is 200+ lines
+pipeline/orchestrator.py:135-397
+
+Every pipeline stage, error handling, motif extraction loop, and tileability update is in one function. This makes it difficult to test individual stages in isolation and hard to trace failures. Consider a Stage protocol or at least extract the motif-extraction block (lines ~279–390) into _save_motifs(session, bp, lane_graph, result).
+
+[low] BlueprintDetailResponse exposes raw_string
+api/v1/schemas.py:28
+
+The full encoded blueprint string is returned in the detail endpoint. This is large (often 10–50 KB) and may be undesirable as a default. Consider serving it from a separate GET /v1/blueprints/{id}/raw endpoint and excluding it from the main detail response.
+
+[low] source_book_id semantics are inconsistent
+pipeline/orchestrator.py:113
+
+When dissolving a book, the first child's source_book_id is None. Subsequent siblings point to the first child's DB UUID. This means the "book" concept is represented by the first child, not a separate entity — but the first child doesn't know it's a book root. Siblings also can't navigate to all siblings without a recursive query. A dedicated source_book_hash TEXT column (storing the book's raw string hash) would be simpler and not require knowing the first child's UUID.
+
+CI/CD, Config, and Infra
+[high] No version pinning in requirements.txt
+requirements.txt
+
+All dependencies use >=X.Y with no upper bound. A pip install six months from now could pull in a breaking major version. Use pip-compile with a requirements.in / requirements.txt split, or add ~= (compatible release) constraints.
+
+[medium] init_db() with create_all() is called in the API lifespan
+api/main.py:16 · storage/database.py:74-81
+
+This is appropriate for development. Before public deployment the in-code TODO says to replace with Alembic — make sure this is done. Running create_all() against a production database with existing data is safe-ish but can miss column changes. Alembic is already scaffolded; the migration workflow just needs to be activated.
+
+[low] .env file is not in .gitignore (cannot verify without seeing the file)
+
+If reddit_client_secret or other credentials end up in a committed .env, they'll be in git history. Confirm .env is gitignored and the .env.example placeholder has no real values.
+
+Action Plan
+Fix the review queue data path (critical correctness):
+Modify infer_recipes() to return a list of structured items instead of calling review_queue.add() directly. In _process_single (orchestrator), after bp is saved, call storage.add_review_item() for each returned item. Then delete pipeline/review_queue.py.
+
+Fix book detection (correctness):
+Have decode() return a (blueprints: list[dict], is_book: bool) tuple, or check "blueprint_book" in the original data before dissolving.
+
+Fix session.bind deprecation (correctness, SQLAlchemy 2.0):
+Replace session.bind.dialect.name with session.get_bind().dialect.name or derive the dialect from the engine URL at startup.
+
+Replace the dataset_stats memory scan with SQL aggregates (performance):
+Use SELECT source_site, COUNT(*) FROM blueprints GROUP BY source_site and a separate JSON aggregate for flag distribution.
+
+Cap or pre-filter the similarity search (performance + DoS):
+Limit get_blueprint_motif_hashes to blueprints that share at least one motif hash with the query, or cap to top N by occurrence. Also log (don't swallow) the exception in the search endpoint.
+
+Add auth to the POST /v1/review-queue/{id} endpoint (security):
+Even a simple X-Admin-Key header check via a FastAPI dependency is sufficient for the personal-use phase.
+
+Pin dependency versions (reliability):
+Run pip install pip-tools && pip-compile requirements.in to generate a locked requirements.txt with exact hashes.
+
+Remove the explicit db.commit() from the review queue endpoint and standardize all session management through the get_db() context manager.
+
+Add indexes on game_version, source_book_id, and Motif.family_hash (already indexed) in the models, and ensure raw_string_hash has a named index.
+
+Make BaseScraper use a persistent SQLite connection for progress tracking to eliminate per-URL connection overhead.

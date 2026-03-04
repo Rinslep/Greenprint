@@ -3,9 +3,9 @@
 import json
 from functools import lru_cache
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from api.dependencies import envelope, paginate
+from api.dependencies import RATE_LIMIT, envelope, limiter, paginate
 from config import REFERENCE_DIR
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -32,7 +32,9 @@ def _recipes_by_name() -> dict:
 
 
 @router.get("")
+@limiter.limit(RATE_LIMIT)
 def list_recipes(
+    request: Request,
     pagination: dict = Depends(paginate),
 ):
     """List recipes from the reference dataset."""
@@ -45,7 +47,8 @@ def list_recipes(
 
 
 @router.get("/{name}")
-def get_recipe(name: str):
+@limiter.limit(RATE_LIMIT)
+def get_recipe(request: Request, name: str):
     """Get a single recipe by name."""
     lookup = _recipes_by_name()
     recipe = lookup.get(name)

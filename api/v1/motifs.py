@@ -1,17 +1,19 @@
 """Motif catalogue endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 import storage
-from api.dependencies import envelope, get_db, paginate, parse_filter_string
+from api.dependencies import RATE_LIMIT, envelope, get_db, limiter, paginate, parse_filter_string
 from api.v1.schemas import BlueprintSummaryResponse, MotifDetailResponse, MotifSummaryResponse
 
 router = APIRouter(prefix="/motifs", tags=["motifs"])
 
 
 @router.get("")
+@limiter.limit(RATE_LIMIT)
 def list_motifs(
+    request: Request,
     filters: dict = Depends(parse_filter_string),
     pagination: dict = Depends(paginate),
     db: Session = Depends(get_db),
@@ -25,7 +27,8 @@ def list_motifs(
 
 
 @router.get("/{motif_id}")
-def get_motif(motif_id: str, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT)
+def get_motif(request: Request, motif_id: str, db: Session = Depends(get_db)):
     """Get full motif by ID."""
     motif = storage.get_motif(db, motif_id)
     if motif is None:
@@ -35,7 +38,9 @@ def get_motif(motif_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{motif_id}/blueprints")
+@limiter.limit(RATE_LIMIT)
 def get_motif_blueprints(
+    request: Request,
     motif_id: str,
     pagination: dict = Depends(paginate),
     db: Session = Depends(get_db),

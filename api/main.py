@@ -4,14 +4,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
-from api.dependencies import envelope
+from api.dependencies import envelope, limiter
 from api.v1 import v1_router
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
