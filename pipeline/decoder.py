@@ -127,7 +127,12 @@ def decode(raw_string: str, source_url: str = "") -> list[dict]:
 
 
 def _extract_book_children(data: dict, book_hash: str) -> list[dict]:
-    """Recursively extract all blueprints from a blueprint book."""
+    """Recursively extract all blueprints from a blueprint book.
+
+    Each child dict carries ``_from_book=True`` so the orchestrator can detect
+    books regardless of child count — a single-child book would otherwise be
+    indistinguishable from a standalone blueprint by list length alone.
+    """
     results = []
     book = data.get("blueprint_book", {})
     children = book.get("blueprints", [])
@@ -137,6 +142,7 @@ def _extract_book_children(data: dict, book_hash: str) -> list[dict]:
             results.extend(_extract_book_children(child, book_hash))
         elif "blueprint" in child:
             child["source_book_id"] = book_hash
+            child["_from_book"] = True
             results.append(child)
 
     log.debug("book_dissolved", child_count=len(results), book_hash=book_hash)

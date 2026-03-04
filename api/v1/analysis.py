@@ -1,17 +1,21 @@
 """Cross-blueprint analysis, search, and stats endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import storage
-from api.dependencies import envelope, get_db
+from api.dependencies import RATE_LIMIT, envelope, get_db, limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["analysis"])
 
 
 class CompareRequest(BaseModel):
-    blueprint_ids: list[str]
+    blueprint_ids: list[str] = Field(..., max_length=20)
 
 
 class SearchRequest(BaseModel):
@@ -19,8 +23,9 @@ class SearchRequest(BaseModel):
 
 
 @router.post("/analysis/compare")
-def compare_blueprints(body: CompareRequest, db: Session = Depends(get_db)):
-    """Side-by-side comparison of multiple blueprints."""
+@limiter.limit(RATE_LIMIT)
+def compare_blueprints(request: Request, body: CompareRequest, db: Session = Depends(get_db)):
+    """Side-by-side comparison of up to 20 blueprints."""
     results = []
     for bp_id in body.blueprint_ids:
         bp = storage.get_blueprint(db, bp_id)
@@ -39,8 +44,16 @@ def compare_blueprints(body: CompareRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/analysis/search")
-def search_similar(body: SearchRequest, db: Session = Depends(get_db)):
-    """Decode a blueprint string on-the-fly and find similar stored blueprints."""
+@limiter.limit(RATE_LIMIT)
+def search_similar(request: Request, body: SearchRequest, db: Session = Depends(get_db)):
+    """Decode a blueprint string on-the-fly and find similar stored blueprints by motif overlap.
+
+    Uses Jaccard similarity over canonical motif hash sets. Pre-filters candidates via a
+    shared-hash JOIN before computing full scores. Returns 503 if no blueprints are ingested.
+    """
+    from analysis.motif.canonicaliser import canonicalise
+    from analysis.motif.extractor import extract_motifs
+    from analysis.motif.lane_model import build_lane_model
     from pipeline.decoder import decode
     from pipeline.validator import validate
 
@@ -59,45 +72,70 @@ def search_similar(body: SearchRequest, db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Validation failed: {exc}")
 
-    # Entity count limit
     entities = decoded.get("blueprint", {}).get("entities", [])
-    entity_count = len(entities)
-    if entity_count > 500:
+    if len(entities) > 500:
         raise HTTPException(
             status_code=400,
-            detail=f"Blueprint has {entity_count} entities (max 500 for search)",
+            detail=f"Blueprint has {len(entities)} entities (max 500 for search)",
         )
 
-    # Compare by motif hashes — get all stored blueprints and compute Jaccard similarity
-    bps, _ = storage.list_blueprints(db, limit=1000)
+    # Extract canonical motif hashes from the query blueprint
+    query_hashes: set[str] = set()
+    try:
+        lane_graph = build_lane_model(decoded)
+        motif_subgraphs = extract_motifs(lane_graph)
+        for sg in motif_subgraphs:
+            hash_, _ = canonicalise(sg)
+            if hash_:
+                query_hashes.add(hash_)
+    except Exception as exc:
+        logger.warning("search_motif_extraction_failed: %s", exc, exc_info=True)
+        # query_hashes stays empty — all candidates will score 0
+
+    # Readiness check — 503 if no motif data in the index
+    if not query_hashes:
+        # No query hashes: either empty blueprint or extraction failed — return 503 only
+        # if the index is also empty, else return empty results.
+        _, bp_total = storage.list_blueprints(db, limit=0)
+        if bp_total == 0:
+            raise HTTPException(
+                status_code=503,
+                detail="Motif index not yet populated. Ingest blueprints first.",
+            )
+        return envelope([])
+
+    # Pre-filter: only blueprints sharing at least one motif hash with the query
+    candidate_ids = storage.get_candidate_blueprint_ids(db, query_hashes, limit=200)
+    if not candidate_ids:
+        return envelope([])
+
+    hash_sets = storage.get_blueprint_motif_hashes_for_ids(db, candidate_ids)
+
+    # Compute Jaccard similarity for each candidate
     similarities = []
-    for bp in bps:
-        bp_summary = bp.summary or {}
-        bp_graph = bp_summary.get("crafting_graph", {})
-        bp_finals = set(bp_graph.get("final_products", []))
-        score = 0.5 if bp_finals else 0.0
-        similarities.append({"id": bp.id, "score": score})
+    for bp_id, stored_hashes in hash_sets.items():
+        if not stored_hashes:
+            continue
+        intersection = len(query_hashes & stored_hashes)
+        union = len(query_hashes | stored_hashes)
+        score = intersection / union if union > 0 else 0.0
+        if score > 0:
+            similarities.append({"id": bp_id, "score": round(score, 4)})
 
     similarities.sort(key=lambda x: x["score"], reverse=True)
     return envelope(similarities[:20])
 
 
 @router.get("/analysis/stats")
-def dataset_stats(db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMIT)
+def dataset_stats(request: Request, db: Session = Depends(get_db)):
     """Dataset-level aggregate statistics."""
     _, bp_total = storage.list_blueprints(db, limit=0)
     _, motif_total = storage.list_motifs(db, limit=0)
     _, review_total = storage.list_review_queue(db)
 
-    bps, _ = storage.list_blueprints(db, limit=10000)
-    by_site: dict[str, int] = {}
-    flag_dist: dict[str, int] = {}
-    for bp in bps:
-        site = bp.source_site or "unknown"
-        by_site[site] = by_site.get(site, 0) + 1
-        for flag in (bp.flags or []):
-            fname = flag.get("flag", "UNKNOWN")
-            flag_dist[fname] = flag_dist.get(fname, 0) + 1
+    by_site = storage.count_blueprints_by_source_site(db)
+    flag_dist = storage.count_flag_distribution(db)
 
     data = {
         "total_blueprints": bp_total,

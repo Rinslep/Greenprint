@@ -11,7 +11,7 @@ import math
 
 import structlog
 
-from pipeline import reference_loader, review_queue
+from pipeline import reference_loader
 
 
 def _snap(v):
@@ -111,15 +111,20 @@ def _find_candidate_recipes(machine_name, item_hints):
     return candidates
 
 
-def infer_recipes(blueprint, blueprint_id="unknown") -> list[dict]:
-    """Mutate blueprint in place: set inferred recipes and populate review queue.
+def infer_recipes(blueprint) -> tuple[list[dict], list[dict]]:
+    """Mutate blueprint in place: set inferred recipes; return queue items for DB persistence.
 
-    Returns list of INFERRED_RECIPE flag dicts.
+    Returns:
+        flags: list of INFERRED_RECIPE flag dicts
+        review_items: list of dicts with {entity_number, context} for machines that
+            could not be resolved. Caller is responsible for persisting these to the
+            DB after the blueprint has been saved (so that blueprint_id is known).
     """
     bp = blueprint.blueprint if hasattr(blueprint, "blueprint") else blueprint
     entities = bp.entities if hasattr(bp, "entities") else bp.get("entities", [])
 
     flags = []
+    review_items = []
     for entity in entities:
         if entity.name not in _MACHINE_NAMES:
             continue
@@ -147,24 +152,22 @@ def infer_recipes(blueprint, blueprint_id="unknown") -> list[dict]:
                           f"machine entity {entity.entity_number}",
             })
         elif len(candidates) > 1:
-            review_queue.add(
-                blueprint_id,
-                entity.entity_number,
-                {
+            review_items.append({
+                "entity_number": entity.entity_number,
+                "context": {
                     "candidates": [c["name"] for c in candidates],
                     "item_hints": sorted(item_hints),
                     "reason": "multiple_candidates",
                 },
-            )
+            })
         else:
-            review_queue.add(
-                blueprint_id,
-                entity.entity_number,
-                {
+            review_items.append({
+                "entity_number": entity.entity_number,
+                "context": {
                     "candidates": [],
                     "item_hints": sorted(item_hints) if item_hints else [],
                     "reason": "no_candidate_found",
                 },
-            )
+            })
 
-    return flags
+    return flags, review_items

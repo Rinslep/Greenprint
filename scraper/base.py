@@ -4,7 +4,6 @@ Provides resumability, rate limiting, robots.txt compliance, deduplication,
 and blueprint string extraction shared across all concrete scrapers.
 """
 
-import hashlib
 import logging
 import re
 import sqlite3
@@ -159,8 +158,6 @@ class BaseScraper(ABC):
 
     def _process_string(self, raw: str, source_url: str, author: str | None = None):
         """Process a candidate blueprint string: dedup and dispatch."""
-        raw_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
         if self._on_new_blueprint:
             self._on_new_blueprint(
                 raw=raw,

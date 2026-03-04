@@ -3,7 +3,6 @@
 import pytest
 from pipeline.validator import validate
 from pipeline.recipe_inference import infer_recipes
-from pipeline import review_queue
 
 
 def _make_blueprint(entities):
@@ -16,13 +15,6 @@ def _make_blueprint(entities):
         }
     }
     return validate(bp_dict)
-
-
-@pytest.fixture(autouse=True)
-def clear_queue():
-    review_queue.clear()
-    yield
-    review_queue.clear()
 
 
 class TestRecipeInference:
@@ -38,15 +30,15 @@ class TestRecipeInference:
                 ],
             },
         ])
-        flags = infer_recipes(wrapper, "test-bp")
+        flags, review_items = infer_recipes(wrapper)
         machine = wrapper.blueprint.entities[0]
         assert machine.recipe == "copper-cable"
         assert len(flags) == 1
         assert flags[0]["flag"] == "INFERRED_RECIPE"
+        assert review_items == []
 
     def test_infer_multiple_candidates(self):
-        """Ambiguous inputs → added to review queue, not inferred."""
-        # iron-plate alone could match multiple recipes
+        """Ambiguous inputs → added to review_items, not inferred."""
         wrapper = _make_blueprint([
             {"entity_number": 1, "name": "assembling-machine-2", "position": {"x": 0, "y": 0}},
             {
@@ -60,15 +52,15 @@ class TestRecipeInference:
                 ],
             },
         ])
-        flags = infer_recipes(wrapper, "test-bp")
+        flags, review_items = infer_recipes(wrapper)
         machine = wrapper.blueprint.entities[0]
-        # Should NOT infer if multiple match
+        # Should NOT infer if multiple recipes match
         if machine.recipe is None:
-            unresolved = review_queue.list_unresolved()
-            assert len(unresolved) >= 1
+            assert len(review_items) >= 1
+            assert review_items[0]["context"]["reason"] == "multiple_candidates"
 
     def test_infer_no_match(self):
-        """No hints → added to review queue."""
+        """No hints → added to review_items."""
         wrapper = _make_blueprint([
             {"entity_number": 1, "name": "assembling-machine-2", "position": {"x": 0, "y": 0}},
             {
@@ -77,12 +69,12 @@ class TestRecipeInference:
                 # No filters — no item hints available
             },
         ])
-        flags = infer_recipes(wrapper, "test-bp")
+        flags, review_items = infer_recipes(wrapper)
         machine = wrapper.blueprint.entities[0]
         assert machine.recipe is None
-        unresolved = review_queue.list_unresolved()
-        assert len(unresolved) == 1
-        assert unresolved[0]["context"]["reason"] == "no_candidate_found"
+        assert len(review_items) == 1
+        assert review_items[0]["entity_number"] == 1
+        assert review_items[0]["context"]["reason"] == "no_candidate_found"
 
     def test_inferred_always_flagged(self):
         """Even with high confidence, INFERRED_RECIPE flag is always set."""
@@ -96,7 +88,7 @@ class TestRecipeInference:
                 ],
             },
         ])
-        flags = infer_recipes(wrapper, "test-bp")
+        flags, review_items = infer_recipes(wrapper)
         assert any(f["flag"] == "INFERRED_RECIPE" for f in flags)
 
     def test_machine_with_explicit_recipe_unchanged(self):
@@ -107,7 +99,8 @@ class TestRecipeInference:
                 "position": {"x": 0, "y": 0}, "recipe": "iron-gear-wheel",
             },
         ])
-        flags = infer_recipes(wrapper, "test-bp")
+        flags, review_items = infer_recipes(wrapper)
         machine = wrapper.blueprint.entities[0]
         assert machine.recipe == "iron-gear-wheel"
         assert len(flags) == 0
+        assert review_items == []

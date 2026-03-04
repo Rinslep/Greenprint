@@ -11,6 +11,7 @@ from storage.models import Base
 
 _engine = None
 _SessionLocal = None
+_dialect: str = "sqlite"  # Set at engine creation time; used by storage layer
 
 
 def _create_engine(url: str | None = None):
@@ -40,9 +41,10 @@ def _create_engine(url: str | None = None):
 
 def get_engine(url: str | None = None):
     """Get or create the global engine."""
-    global _engine
+    global _engine, _dialect
     if _engine is None:
         _engine = _create_engine(url)
+        _dialect = _engine.dialect.name
     return _engine
 
 
@@ -83,8 +85,9 @@ def init_db(url: str | None = None):
 
 def reset_engine():
     """Reset the global engine and session factory. Used in tests."""
-    global _engine, _SessionLocal
+    global _engine, _SessionLocal, _dialect
     if _engine is not None:
         _engine.dispose()
     _engine = None
     _SessionLocal = None
+    _dialect = "sqlite"

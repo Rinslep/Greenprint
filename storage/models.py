@@ -61,6 +61,9 @@ class Blueprint(Base):
     __table_args__ = (
         Index("ix_blueprints_source_site", "source_site"),
         Index("ix_blueprints_scraped_at", "scraped_at"),
+        Index("ix_blueprints_game_version", "game_version"),
+        Index("ix_blueprints_source_book_id", "source_book_id"),
+        Index("ix_blueprints_author_hash", "author_hash"),
     )
 
 
@@ -79,7 +82,19 @@ class Motif(Base):
     belt_type: Mapped[str | None] = mapped_column(Text, nullable=True)
     uses_underground: Mapped[bool] = mapped_column(Boolean, default=False)
     uses_splitter: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_multi_destination: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_sideloaded: Mapped[bool] = mapped_column(Boolean, default=False)
     entity_count: Mapped[int] = mapped_column(Integer, default=0)
+    # P3: family hash (tier-normalised grouping)
+    family_hash: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
+    family_occurrence_count: Mapped[int] = mapped_column(Integer, default=0)
+    # P3: sub-motif hierarchy
+    elaboration_depth: Mapped[int] = mapped_column(Integer, default=0)
+    sub_motif_of_family: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # P3: tileability
+    is_tileable: Mapped[bool] = mapped_column(Boolean, default=False)
+    tile_vector: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    tile_count: Mapped[int] = mapped_column(Integer, default=0)
     first_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, default=lambda: datetime.now(timezone.utc)
     )
