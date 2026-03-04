@@ -42,6 +42,9 @@ _CHEST_NAMES = frozenset(
 _LOADER_NAMES = frozenset(
     name for name, e in _ENTITY_DATA.items() if "loader" in name
 )
+_POLE_NAMES = frozenset(
+    name for name, e in _ENTITY_DATA.items() if "pole_supply_area" in e
+)
 
 _DIRECTION_DELTA = {
     0: (0, -1),   # North
@@ -267,7 +270,7 @@ def build_lane_model(blueprint) -> nx.DiGraph:
                 # Register out_node so downstream traversals can read its node_type.
                 if not G.has_node(out_node):
                     G.add_node(out_node, entity=splitter, node_type="belt_lane", belt_speed=belt_speed)
-                edge_attrs = {"edge_type": "splitter"}
+                edge_attrs = {"edge_type": "splitter", "entity": splitter}
                 if spl_filter_item:
                     edge_attrs["filter_item"] = spl_filter_item
                 G.add_edge(in_node, out_node, **edge_attrs)
@@ -281,6 +284,11 @@ def build_lane_model(blueprint) -> nx.DiGraph:
 
     for loader in loaders:
         G.add_node(("chest", loader.entity_number), entity=loader, node_type="loader")
+
+    # 4b. Power pole nodes
+    poles = [e for e in entities if e.name in _POLE_NAMES]
+    for pole in poles:
+        G.add_node(("pole", pole.entity_number), entity=pole, node_type="pole")
 
     # 5. Inserter edges
     for inserter in inserters:

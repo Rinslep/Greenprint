@@ -250,3 +250,68 @@ class TestMotifExtractor:
                 if isinstance(n, tuple) and len(n) == 2 and n[0] == "machine"
             ]
             assert len(machine_nodes) <= 3  # source + at most 2 destinations
+
+    def test_power_poles_included_in_motif(self):
+        """Power pole nodes near motif entities are included via enrichment."""
+        wrapper = _make_blueprint([
+            {"entity_number": 1, "name": "assembling-machine-1",
+             "position": {"x": 0, "y": 0}, "recipe": "iron-gear-wheel"},
+            {"entity_number": 2, "name": "inserter",
+             "position": {"x": 1.5, "y": 0.5}, "direction": 2},
+            {"entity_number": 3, "name": "assembling-machine-1",
+             "position": {"x": 3, "y": 0}, "recipe": "electronic-circuit"},
+            {"entity_number": 4, "name": "small-electric-pole",
+             "position": {"x": 1.5, "y": 1.5}},
+        ])
+        L = build_lane_model(wrapper)
+        motifs = extract_motifs(L)
+        assert len(motifs) >= 1
+        # The pole node should appear in at least one motif
+        all_nodes = set()
+        for m in motifs:
+            all_nodes.update(m.nodes())
+        pole_nodes = [n for n in all_nodes if isinstance(n, tuple) and len(n) == 2 and n[0] == "pole"]
+        assert len(pole_nodes) >= 1
+
+    def test_input_belts_included_in_motif(self):
+        """Feeder belt nodes entering the motif from the side are included."""
+        wrapper = _make_blueprint([
+            {"entity_number": 1, "name": "assembling-machine-1",
+             "position": {"x": 0, "y": 0}, "recipe": "iron-gear-wheel"},
+            {"entity_number": 2, "name": "inserter",
+             "position": {"x": 1.5, "y": 0.5}, "direction": 2},
+            # Belt path
+            {"entity_number": 3, "name": "transport-belt",
+             "position": {"x": 2.5, "y": 0.5}, "direction": 2},
+            {"entity_number": 4, "name": "transport-belt",
+             "position": {"x": 3.5, "y": 0.5}, "direction": 2},
+            {"entity_number": 5, "name": "inserter",
+             "position": {"x": 4.5, "y": 0.5}, "direction": 2},
+            {"entity_number": 6, "name": "assembling-machine-1",
+             "position": {"x": 6, "y": 0}, "recipe": "electronic-circuit"},
+            # Feeder belt entering the path from the side
+            {"entity_number": 7, "name": "transport-belt",
+             "position": {"x": 2.5, "y": -0.5}, "direction": 4},  # South into (3,1)
+        ])
+        L = build_lane_model(wrapper)
+        motifs = extract_motifs(L)
+        assert len(motifs) >= 1
+        # The feeder belt should be included in the motif
+        all_nodes = set()
+        for m in motifs:
+            all_nodes.update(m.nodes())
+        # _snap(2.5) = 3, _snap(-0.5) = 0
+        assert (3, 0, "left") in all_nodes or (3, 0, "right") in all_nodes
+
+    def test_splitter_entities_in_motif(self):
+        """Splitter traversal produces a SPLIT category motif."""
+        wrapper = _load_fixture("splitters.txt")
+        L = build_lane_model(wrapper)
+        motifs = extract_motifs(L)
+        split_motifs = [m for m in motifs if m.graph.get("category") == "SPLIT"]
+        assert len(split_motifs) >= 1
+        # Splitter edges should carry entity data
+        for m in split_motifs:
+            for u, v, data in m.edges(data=True):
+                if data.get("edge_type") == "splitter":
+                    assert "entity" in data

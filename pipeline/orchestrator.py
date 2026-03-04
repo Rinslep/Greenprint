@@ -9,6 +9,7 @@ import logging
 from dataclasses import dataclass, field
 from fractions import Fraction
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from analysis.crafting_graph import build_crafting_graph
@@ -108,6 +109,15 @@ def process_string(
         else:
             child_raw = raw
             child_hash = raw_hash
+
+        # Per-child dedup check (books can share identical children)
+        if is_book:
+            existing_child = storage.get_blueprint_by_hash(session, child_hash)
+            if existing_child:
+                result.blueprint_ids.append(existing_child.id)
+                if first_child_id is None:
+                    first_child_id = existing_child.id
+                continue
 
         # First child gets source_book_id=None; subsequent siblings point to it.
         source_book_id = first_child_id if (is_book and i > 0) else None
@@ -275,7 +285,19 @@ def _process_single(
         )
         result.blueprint_ids.append(bp.id)
         result.flags = all_flags
+    except IntegrityError:
+        session.rollback()
+        existing = storage.get_blueprint_by_hash(session, raw_hash)
+        if existing:
+            result.blueprint_ids.append(existing.id)
+            result.flags = all_flags
+            logger.info("Duplicate hash %s — using existing record", raw_hash[:12])
+        else:
+            logger.error("IntegrityError but no existing record for %s", raw_hash[:12])
+            result.errors.append("IntegrityError: duplicate hash but lookup failed")
+        return result
 
+    try:
         # Persist review queue items now that bp.id is known
         for item in pending_review_items:
             try:

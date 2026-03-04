@@ -184,3 +184,49 @@ class TestCanonicaliser:
         h1, _ = canonicalise(motif1)
         h2, _ = canonicalise(motif2)
         assert h1 != h2
+
+    def test_splitter_on_edge_is_included(self):
+        """Splitter entity on edge attributes appears in canonical output."""
+        G = nx.DiGraph()
+        machine = _make_mock_entity("assembling-machine-1", 0, 0, 0)
+        belt = _make_mock_entity("transport-belt", 3, 0, 2)
+        splitter = _make_mock_entity("splitter", 5, 0, 2)
+
+        m_node = ("machine", machine.entity_number)
+        b_node = (3, 0, "left")
+        out_node = (6, 0, "left")
+
+        G.add_node(m_node, entity=machine, node_type="machine")
+        G.add_node(b_node, entity=belt, node_type="belt_lane")
+        G.add_node(out_node, entity=splitter, node_type="belt_lane")
+
+        G.add_edge(m_node, b_node, edge_type="inserter")
+        G.add_edge(b_node, out_node, edge_type="splitter", entity=splitter)
+
+        G.graph["source_machine"] = m_node
+
+        _, entities = canonicalise(G)
+        entity_types = [e["entity_type"] for e in entities]
+        assert "splitter" in entity_types
+
+    def test_power_pole_node_is_included(self):
+        """Pole node entity appears in canonical output."""
+        G = nx.DiGraph()
+        machine = _make_mock_entity("assembling-machine-1", 0, 0, 0)
+        belt = _make_mock_entity("transport-belt", 2, 0, 2)
+        pole = _make_mock_entity("small-electric-pole", 1, 1, 0)
+
+        m_node = ("machine", machine.entity_number)
+        b_node = (2, 0, "left")
+        p_node = ("pole", pole.entity_number)
+
+        G.add_node(m_node, entity=machine, node_type="machine")
+        G.add_node(b_node, entity=belt, node_type="belt_lane")
+        G.add_node(p_node, entity=pole, node_type="pole")
+
+        G.add_edge(m_node, b_node, edge_type="inserter")
+        G.graph["source_machine"] = m_node
+
+        _, entities = canonicalise(G)
+        entity_types = [e["entity_type"] for e in entities]
+        assert "small-electric-pole" in entity_types

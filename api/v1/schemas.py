@@ -44,6 +44,7 @@ class MotifSummaryResponse(BaseModel):
     """Motif list item."""
     id: str
     canonical_hash: str
+    canonical_entities: list | None = None
     occurrence_count: int = 0
     category: str | None = None
     source_recipes: dict | None = None

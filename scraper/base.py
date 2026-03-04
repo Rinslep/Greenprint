@@ -118,13 +118,14 @@ class BaseScraper(ABC):
         time.sleep(self._delay)
 
     def _fetch_with_retry(
-        self, client: httpx.Client, url: str, max_retries: int = 3
+        self, client: httpx.Client, url: str, max_retries: int = 3,
+        params: dict | None = None,
     ) -> httpx.Response | None:
         """Fetch a URL with retry logic and exponential backoff."""
         for attempt in range(max_retries):
             try:
                 self._rate_limit()
-                response = client.get(url)
+                response = client.get(url, params=params)
 
                 if response.status_code == 200:
                     return response
